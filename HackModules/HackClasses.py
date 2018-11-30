@@ -29,25 +29,30 @@ class MethodException(Exception):
         self.value=value
         
 class data():
-    def __init__(self, array):
+    def __init__(self, array, autoPoly = True, autoNorm= True, degree=1, method='std'):
         """The default degree of the poly array is 1."""
         if type(array) == pd.core.frame.DataFrame:
             self.array = array.values
         elif type(array) == np.ndarray:
             self.array = array
-        self.polyArray=polyFeature(1)
+        self.autoPoly=autoPoly
+        self.autoNorm=autoNorm
+        if self.autoPoly==True:
+            self.polyFeature(degree)
         
-    def polyFeature(self, degree):
-        poly = prep.PolynomialFeatures(degree, include_bias = False)
-        self.polyArray = poly.fit_transform(self.array)
-        return self.polyArray
+    def polyFeature(self, degree=1):
+        polyMethod = prep.PolynomialFeatures(degree, include_bias = False)
+        self.poly = polyMethod.fit_transform(self.array)
+        if self.autoNorm==True:
+            self.normalizeFeature('std')
+        return self.poly
     
-    def normalizeFeature(self, method):
-        X=self.polyArray
+    def normalizeFeature(self, method='std'):
+        X=self.poly
         try:
             if X.ndim == 1:  # Reshape n elements 1d array to [n,1] 2d array.
                 X=np.reshape(X,(-1,1)) 
-            X_norm=np.ones((X.shape[0],X.shape[1]+1), dtype=np.float64)
+            self.norm=np.ones((X.shape[0],X.shape[1]+1), dtype=np.float64)
             if method == 'std':
                 self.norm[:,1:]=(X-X.mean(0))/X.std(0)     
             elif method == 'range':
