@@ -38,6 +38,13 @@ def normalRegEq(X,y,beta):
     theta=np.linalg.inv(X.T@X+beta*L)@X.T@y
     return theta
 
+def formatTime(t):
+    minutes, seconds_rem = divmod(t, 60)
+    hours, minutes=divmod(minutes, 60)
+    # use string formatting with C type % specifiers
+    # %02d means integer field of 2 left padded with zero if needed
+    return "%02d:%02d:%02d" % (hours, minutes, seconds_rem)
+
 
     
 # def linearRegCostFunction(X, y, theta, reg):
