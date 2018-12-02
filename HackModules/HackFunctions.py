@@ -100,16 +100,17 @@ def train_model_multismpl(tcv, epoch, degree, beta, rep=True, random_int=999, mu
     return error_train_reg_multismpl, error_cv_reg_multismpl
                      
 
-
-def beta_loop(tcv, beta_num, epoch, beta_range, degree, rep=True, multiprocess='OFF', cpu_num=1):
+# This can be used to see the variation of beta during the training
+def beta_loop(tcv, beta_num, epoch, beta_range, degree, rep=True, multiprocess='OFF', cpu_num=1, show=True):
     # theta_reg_multismpl=np.zeros((epoch, featureSize))
     error_train_reg_multibeta=np.zeros((beta_num, len(beta_range)))
     error_cv_reg_multibeta=np.zeros((beta_num, len(beta_range)))
     beta_array=np.zeros(beta_num)
-    # Initial call to print 0% progress
-    total=beta_num*len(beta_range)
-    pbar=progressBar(total, prefix = 'Progress:', suffix = 'Complete', decimals = 2, length = 50)
-    tm=timer(total)
+    if show==True:
+        # Initial call to print 0% progress
+        total=beta_num*len(beta_range)
+        pbar=progressBar(total, prefix = 'Progress:', suffix = 'Complete', decimals = 2, length = 50)
+        tm=timer(total)
     
     # Calculate beta multiple times and find the mean value of them as best beta
     for i in range(0,beta_num): 
@@ -118,15 +119,16 @@ def beta_loop(tcv, beta_num, epoch, beta_range, degree, rep=True, multiprocess='
         for index, beta in enumerate(beta_range):
             
             error_train_reg_multismpl, error_cv_reg_multismpl=train_model_multismpl(tcv, epoch, degree, beta, rep=rep,
-                                                     random_int=71*i, multiprocess=multiprocess, cpu_num=cpu_num)   
+                        random_int=beta_num*epoch*len(beta_range)+71*i+98*index, multiprocess=multiprocess, cpu_num=cpu_num)   
             
             # show the progess and timer
-            iteration=i*len(beta_range)+index+1
-            s1=pbar.update(iteration, ToPrint=False)
-            s2=tm.update(iteration,ToPrint=False)
-            print('\r'+s1+" "*5+s2,end='\r')
-            if iteration==total:
-                print()
+            if show==True:
+                iteration=i*len(beta_range)+index+1
+                s1=pbar.update(iteration, ToPrint=False)
+                s2=tm.update(iteration,ToPrint=False)
+                print('\r'+s1+" "*5+s2,end='\r')
+                if iteration==total:
+                    print()
             
             error_train_reg_multibeta[i, index] = error_train_reg_multismpl.sum(0)/epoch
             error_cv_reg_multibeta[i, index] = error_cv_reg_multismpl.sum(0)/epoch
@@ -135,9 +137,46 @@ def beta_loop(tcv, beta_num, epoch, beta_range, degree, rep=True, multiprocess='
         beta_array[i] = beta_range[idx]
     error_train_reg=error_train_reg_multibeta.mean(0)
     error_cv_reg=error_cv_reg_multibeta.mean(0)
-
-                               
+                                  
     return beta_array, error_train_reg, error_cv_reg
+
+def degree_loop(tcv, beta_num, epoch, beta_range, degree_range, rep=True, multiprocess='OFF', cpu_num=1, show=True):
+    beta_best_array=np.zeros(len(degree_range))
+    error_train_poly_multismpl=np.zeros(epoch)
+    error_cv_poly_multismpl=np.zeros(epoch)
+    if show==True:
+        # Initial call to print 0% progress
+        total=len(degree_range)*epoch
+        pbar=progressBar(total, prefix = 'Progress:', suffix = 'Complete', decimals = 2, length = 50)
+        tm=timer(total)
+    
+    for d_idx,degree in enumerate(degree_range):
+        beta_array,_,_=beta_loop(tcv, beta_num, epoch, beta_range, degree, rep, multiprocess, cpu_num)
+        beta_best_array[d_idx]=beta.array.mean()
+        
+        # Calculate the cv error of this degree 
+        for i in range(epoch):
+            random_int=int((157*i)/3) 
+            error_train_poly_multismpl[i], error_cv_poly_multismpl[i]=train_model(tcv, degree, beta_best_array[d_idx],
+                                                                                random_int, rep)
+        
+        error_train_poly[d_idx] = error_train_poly_multismpl.sum(0)/epoch
+        error_cv_poly[d_idx] = error_cv_poly_multismpl.sum(0)/epoch
+
+
+        
+        
+        
+        
+
+        
+        
+        
+        
+        
+        
+
+
 
     
 # def linearRegCostFunction(X, y, theta, reg):
