@@ -27,6 +27,12 @@ class MethodException(Exception):
     def __init__(self, msg, value):
         self.msg=msg
         self.value=value
+
+class ValueException(Exception):
+    def __init__(self, msg, value):
+        self.msg=msg
+        self.value=value
+    
         
 class data():
     def __init__(self, array, autoPoly = True, autoNorm= True, degree=1, method='std'):
