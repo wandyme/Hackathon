@@ -65,10 +65,11 @@ def train_model(tcv, degree, beta, random_int=999, rep=True):
     cv_unc=cv.uncertainty.values
     cv_J=cv.J.values
 
-    theta_reg=normalRegEq(train_data.norm, train_J, beta)
-    error_train_reg_smpl=computeCost(train_data.norm, train_J, theta_reg)
-    error_cv_reg_smpl=computeCost(cv_data.norm, cv_J, theta_reg)
-    return error_train_reg_smpl, error_cv_reg_smpl  
+    theta=normalRegEq(train_data.norm, train_J, beta)
+    error_train_smpl=computeCost(train_data.norm, train_J, theta)
+    error_cv_smpl=computeCost(cv_data.norm, cv_J, theta)
+#     print(theta)
+    return theta, error_train_smpl, error_cv_smpl  
 #   print(f'Loop {i}-{index}-{j} ended.\n')
 
 def train_model_multismpl(tcv, epoch, degree, beta, rep=True, random_int=999, multiprocess='OFF', cpu_num=1):
@@ -79,7 +80,7 @@ def train_model_multismpl(tcv, epoch, degree, beta, rep=True, random_int=999, mu
         if multiprocess== 'OFF':
             for j in range(0,epoch,1):
                 random_int=int((157*j+random_int)/3) 
-                error_train_multismpl[j], error_cv_multismpl[j]=train_model(tcv, degree, beta, random_int, rep)
+                _, error_train_multismpl[j], error_cv_multismpl[j]=train_model(tcv, degree, beta, random_int, rep)
         elif multiprocess == 'ON':
             pool=Pool(processes=cpu_num)
             results=[]
@@ -90,8 +91,8 @@ def train_model_multismpl(tcv, epoch, degree, beta, rep=True, random_int=999, mu
             pool.join()
                                                 
             for j, res in enumerate(results):
-                error_train_multismpl[j]=res.get()[0]
-                error_cv_multismpl[j]=res.get()[1]
+                error_train_multismpl[j]=res.get()[1]
+                error_cv_multismpl[j]=res.get()[2]
         else:
             raise hc.ValueException('multiprocess should be either \'ON\' or \'OFF\'(case sensitive)', multiprocess)
     except hc.ValueException as ex:
@@ -137,8 +138,8 @@ def train_loop(tcv, train_num, epoch, v_range, other_v, n_v='beta', rep=True, mu
                 if iteration==total:
                     print()
             
-            error_train_multitrain[i, index] = error_train_multismpl.sum(0)/epoch
-            error_cv_multitrain[i, index] = error_cv_multismpl.sum(0)/epoch
+            error_train_multitrain[i, index] = error_train_multismpl.mean(0)
+            error_cv_multitrain[i, index] = error_cv_multismpl.mean(0)
 
         idx=error_cv_multitrain[i,:].argmin()
         v_array[i] = v_range[idx]
@@ -149,38 +150,40 @@ def train_loop(tcv, train_num, epoch, v_range, other_v, n_v='beta', rep=True, mu
     return v_array, error_train, error_cv
 
 
-# def degree_loop(tcv, epoch, beta_range=0, degree_range, rep=True, multiprocess='OFF', cpu_num=1, show=True):
-#     beta_best_array=np.zeros(len(degree_range))
-#     error_train_poly_multismpl=np.zeros(epoch)
-#     error_cv_poly_multismpl=np.zeros(epoch)
-    
-#     if show==True:
-#         # Initial call to print 0% progress
-#         total=len(degree_range)*epoch
-#         pbar=progressBar(total, prefix = 'Progress:', suffix = 'Complete', decimals = 2, length = 50)
-#         tm=timer(total)
-    
-#     for d_idx,degree in enumerate(degree_range):
-# #         beta_array,_,_=beta_loop(tcv, beta_num, epoch, beta_range, degree, rep, multiprocess, cpu_num)
-# #         beta_best_array[d_idx]=beta.array.mean()
-        
-#         # Calculate the cv error of this degree 
-#         for i in range(epoch):
-#             random_int=int(d_idx*(157*i)/3) 
-#             train_model_multismpl(tcv, epoch, degree, beta, rep=True, random_int=999, multiprocess='OFF', cpu_num=1)
-# #             error_train_poly_multismpl[i], error_cv_poly_multismpl[i]=train_model_(tcv, degree, beta_best_array[d_idx],
-# #                                                                                 random_int, rep)
-        
-#         if show==True:
-#             iteration=d_idx*epoch+i+1
-#             s1=pbar.update(iteration, ToPrint=False)
-#             s2=tm.update(iteration,ToPrint=False)
-#             print('\r'+s1+" "*5+s2,end='\r')
-#             if iteration==total:
-#                 print()
-        
-#         error_train_poly[d_idx] = error_train_poly_multismpl.sum(0)/epoch
-#         error_cv_poly[d_idx] = error_cv_poly_multismpl.sum(0)/epoch
+def theta_multismpl(tcv, epoch, degree, beta, featureSize, rep=True, random_int=999, multiprocess='OFF', cpu_num=1):
+    error_train_multismpl=np.zeros(epoch)
+    error_cv_multismpl=np.zeros(epoch)
+    theta_multismpl=np.zeros((epoch, featureSize))
+
+    try:
+        # Calculate the mean value of error_cv_reg with differet sets of train data samples
+        if multiprocess== 'OFF':
+            for j in range(0,epoch,1):
+                random_int=int((157*j+random_int)/3) 
+                theta_multismpl[j,:], error_train_multismpl[j], error_cv_multismpl[j]=train_model(tcv, degree, beta,
+                                                                                                  random_int, rep)
+#                 print(theta_multismpl)
+        elif multiprocess == 'ON':
+            pool=Pool(processes=cpu_num)
+            results=[]
+            for j in range(0,epoch,1):
+                random_int=int((157*j+random_int)/3)
+                results.append(pool.apply_async(train_model, (tcv, degree, beta, random_int, rep)))
+            pool.close()
+            pool.join()
+            
+                                                          
+            for j, res in enumerate(results):
+                theta_multismpl[j,:]=res.get()[0]
+                error_train_multismpl[j]=res.get()[1]
+                error_cv_multismpl[j]=res.get()[2]
+                       
+        else:
+            raise hc.ValueException('multiprocess should be either \'ON\' or \'OFF\'(case sensitive)', multiprocess)
+    except hc.ValueException as ex:
+        print(f'The error is: {ex.msg}, here the input multiprocess is \'{ex.value}\'')
+        return  # stop the whole execuation of the this function.
+    return theta_multismpl, error_train_multismpl, error_cv_multismpl
         
 #     return error_train_poly, error_cv_poly
 
