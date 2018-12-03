@@ -72,14 +72,14 @@ def train_model(tcv, degree, beta, random_int=999, rep=True):
 #   print(f'Loop {i}-{index}-{j} ended.\n')
 
 def train_model_multismpl(tcv, epoch, degree, beta, rep=True, random_int=999, multiprocess='OFF', cpu_num=1):
-    error_train_reg_multismpl=np.zeros(epoch)
-    error_cv_reg_multismpl=np.zeros(epoch)
+    error_train_multismpl=np.zeros(epoch)
+    error_cv_multismpl=np.zeros(epoch)
     try:
         # Calculate the mean value of error_cv_reg with differet sets of train data samples
         if multiprocess== 'OFF':
             for j in range(0,epoch,1):
                 random_int=int((157*j+random_int)/3) 
-                error_train_reg_multismpl[j], error_cv_reg_multismpl[j]=train_model(tcv, degree, beta, random_int, rep)
+                error_train_multismpl[j], error_cv_multismpl[j]=train_model(tcv, degree, beta, random_int, rep)
         elif multiprocess == 'ON':
             pool=Pool(processes=cpu_num)
             results=[]
@@ -90,78 +90,99 @@ def train_model_multismpl(tcv, epoch, degree, beta, rep=True, random_int=999, mu
             pool.join()
                                                 
             for j, res in enumerate(results):
-                error_train_reg_multismpl[j]=res.get()[0]
-                error_cv_reg_multismpl[j]=res.get()[1]
+                error_train_multismpl[j]=res.get()[0]
+                error_cv_multismpl[j]=res.get()[1]
         else:
             raise hc.ValueException('multiprocess should be either \'ON\' or \'OFF\'(case sensitive)', multiprocess)
     except hc.ValueException as ex:
         print(f'The error is: {ex.msg}, here the input multiprocess is \'{ex.value}\'')
         return  # stop the whole execuation of the this function.
-    return error_train_reg_multismpl, error_cv_reg_multismpl
+    return error_train_multismpl, error_cv_multismpl
                      
 
 # This can be used to see the variation of beta during the training
-def beta_loop(tcv, beta_num, epoch, beta_range, degree, rep=True, multiprocess='OFF', cpu_num=1, show=True):
-    # theta_reg_multismpl=np.zeros((epoch, featureSize))
-    error_train_reg_multibeta=np.zeros((beta_num, len(beta_range)))
-    error_cv_reg_multibeta=np.zeros((beta_num, len(beta_range)))
-    beta_array=np.zeros(beta_num)
+def train_loop(tcv, train_num, epoch, v_range, other_v, n_v='beta', rep=True, multiprocess='OFF', cpu_num=1, show=True):
+    
+    # theta_reg_multismpl=np.zeros((epoch, featureSize)a])
+    error_train_multitrain=np.zeros((train_num, len(v_range)))
+    error_cv_multitrain=np.zeros((train_num, len(v_range)))
+    v_array=np.zeros(train_num)
     if show==True:
         # Initial call to print 0% progress
-        total=beta_num*len(beta_range)
+        total=train_num*len(v_range)
         pbar=progressBar(total, prefix = 'Progress:', suffix = 'Complete', decimals = 2, length = 50)
         tm=timer(total)
     
     # Calculate beta multiple times and find the mean value of them as best beta
-    for i in range(0,beta_num): 
+    for i in range(0,train_num): 
         
         # Get beta_best by find the minimum error_cv_reg
-        for index, beta in enumerate(beta_range):
-            
-            error_train_reg_multismpl, error_cv_reg_multismpl=train_model_multismpl(tcv, epoch, degree, beta, rep=rep,
-                        random_int=beta_num*epoch*len(beta_range)+71*i+98*index, multiprocess=multiprocess, cpu_num=cpu_num)   
+        for index, v in enumerate(v_range):
+            if n_v == 'beta':
+                degree=other_v
+                beta=v
+            elif n_v == 'degree':
+                degree=v
+                beta=other_v
+                     
+            error_train_multismpl, error_cv_multismpl=train_model_multismpl(tcv, epoch, degree, beta, rep=rep,
+                        random_int=train_num*epoch*len(v_range)+71*i+98*index, multiprocess=multiprocess, cpu_num=cpu_num)   
             
             # show the progess and timer
             if show==True:
-                iteration=i*len(beta_range)+index+1
+                iteration=i*len(v_range)+index+1
                 s1=pbar.update(iteration, ToPrint=False)
                 s2=tm.update(iteration,ToPrint=False)
                 print('\r'+s1+" "*5+s2,end='\r')
                 if iteration==total:
                     print()
             
-            error_train_reg_multibeta[i, index] = error_train_reg_multismpl.sum(0)/epoch
-            error_cv_reg_multibeta[i, index] = error_cv_reg_multismpl.sum(0)/epoch
-           
-        idx=error_cv_reg_multibeta[i,:].argmin()
-        beta_array[i] = beta_range[idx]
-    error_train_reg=error_train_reg_multibeta.mean(0)
-    error_cv_reg=error_cv_reg_multibeta.mean(0)
-                                  
-    return beta_array, error_train_reg, error_cv_reg
+            error_train_multitrain[i, index] = error_train_multismpl.sum(0)/epoch
+            error_cv_multitrain[i, index] = error_cv_multismpl.sum(0)/epoch
 
-def degree_loop(tcv, beta_num, epoch, beta_range, degree_range, rep=True, multiprocess='OFF', cpu_num=1, show=True):
-    beta_best_array=np.zeros(len(degree_range))
-    error_train_poly_multismpl=np.zeros(epoch)
-    error_cv_poly_multismpl=np.zeros(epoch)
-    if show==True:
-        # Initial call to print 0% progress
-        total=len(degree_range)*epoch
-        pbar=progressBar(total, prefix = 'Progress:', suffix = 'Complete', decimals = 2, length = 50)
-        tm=timer(total)
+        idx=error_cv_multitrain[i,:].argmin()
+        v_array[i] = v_range[idx]
+
+    error_train=error_train_multitrain.mean(0)
+    error_cv=error_cv_multitrain.mean(0)
+                                  
+    return v_array, error_train, error_cv
+
+
+# def degree_loop(tcv, epoch, beta_range=0, degree_range, rep=True, multiprocess='OFF', cpu_num=1, show=True):
+#     beta_best_array=np.zeros(len(degree_range))
+#     error_train_poly_multismpl=np.zeros(epoch)
+#     error_cv_poly_multismpl=np.zeros(epoch)
     
-    for d_idx,degree in enumerate(degree_range):
-        beta_array,_,_=beta_loop(tcv, beta_num, epoch, beta_range, degree, rep, multiprocess, cpu_num)
-        beta_best_array[d_idx]=beta.array.mean()
+#     if show==True:
+#         # Initial call to print 0% progress
+#         total=len(degree_range)*epoch
+#         pbar=progressBar(total, prefix = 'Progress:', suffix = 'Complete', decimals = 2, length = 50)
+#         tm=timer(total)
+    
+#     for d_idx,degree in enumerate(degree_range):
+# #         beta_array,_,_=beta_loop(tcv, beta_num, epoch, beta_range, degree, rep, multiprocess, cpu_num)
+# #         beta_best_array[d_idx]=beta.array.mean()
         
-        # Calculate the cv error of this degree 
-        for i in range(epoch):
-            random_int=int((157*i)/3) 
-            error_train_poly_multismpl[i], error_cv_poly_multismpl[i]=train_model(tcv, degree, beta_best_array[d_idx],
-                                                                                random_int, rep)
+#         # Calculate the cv error of this degree 
+#         for i in range(epoch):
+#             random_int=int(d_idx*(157*i)/3) 
+#             train_model_multismpl(tcv, epoch, degree, beta, rep=True, random_int=999, multiprocess='OFF', cpu_num=1)
+# #             error_train_poly_multismpl[i], error_cv_poly_multismpl[i]=train_model_(tcv, degree, beta_best_array[d_idx],
+# #                                                                                 random_int, rep)
         
-        error_train_poly[d_idx] = error_train_poly_multismpl.sum(0)/epoch
-        error_cv_poly[d_idx] = error_cv_poly_multismpl.sum(0)/epoch
+#         if show==True:
+#             iteration=d_idx*epoch+i+1
+#             s1=pbar.update(iteration, ToPrint=False)
+#             s2=tm.update(iteration,ToPrint=False)
+#             print('\r'+s1+" "*5+s2,end='\r')
+#             if iteration==total:
+#                 print()
+        
+#         error_train_poly[d_idx] = error_train_poly_multismpl.sum(0)/epoch
+#         error_cv_poly[d_idx] = error_cv_poly_multismpl.sum(0)/epoch
+        
+#     return error_train_poly, error_cv_poly
 
 
         
